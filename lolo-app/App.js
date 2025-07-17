@@ -1,5 +1,5 @@
 // App.js
-import React, { useState, useCallback } from 'react'; // useStateを追加
+import React, { useState, useCallback } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
@@ -13,21 +13,20 @@ import MessagesScreen from './screens/MessagesScreen';
 import PrivacySettingsScreen from './screens/PrivacySettingsScreen';
 import EventCreationScreen from './screens/EventCreationScreen';
 import BlastScreen from './screens/BlastScreen';
+import ProfileScreen from './screens/ProfileScreen';
+import ChatScreen from './screens/ChatScreen'; // ChatScreenをインポート
 
 const Stack = createStackNavigator();
 
 SplashScreen.preventAutoHideAsync();
 
 export default function App() {
-  // --- イベントの状態管理を追加 ---
   const [events, setEvents] = useState([]);
+  const [isRadiusVisible, setIsRadiusVisible] = useState(true);
 
-  // 新しいイベントを追加する関数
   const addEvent = (newEvent) => {
-    // 簡易的にIDを付与してリストに追加
     setEvents(prevEvents => [...prevEvents, { ...newEvent, id: Date.now().toString() }]);
   };
-  // -----------------------------
 
   const [fontsLoaded, fontError] = useFonts({
     'EBGaramond-Regular': require('./assets/fonts/EBGaramond-Regular.ttf'),
@@ -47,7 +46,7 @@ export default function App() {
   return (
     <View style={styles.container} onLayout={onLayoutRootView}>
       <NavigationContainer>
-        <Stack.Navigator 
+        <Stack.Navigator
           initialRouteName="Login"
           screenOptions={{
             headerShown: false,
@@ -57,20 +56,23 @@ export default function App() {
         >
           <Stack.Screen name="Login" component={LoginScreen} />
           
-          {/* MapHomeScreenにeventsを渡す */}
           <Stack.Screen name="MapHome">
-            {(props) => <MapHomeScreen {...props} events={events} />}
+            {(props) => <MapHomeScreen {...props} events={events} isRadiusVisible={isRadiusVisible} />}
           </Stack.Screen>
 
           <Stack.Screen name="Messages" component={MessagesScreen} />
-          <Stack.Screen name="PrivacySettings" component={PrivacySettingsScreen} />
           
-          {/* EventCreationScreenにaddEvent関数を渡す */}
+          <Stack.Screen name="PrivacySettings">
+              {(props) => <PrivacySettingsScreen {...props} isRadiusVisible={isRadiusVisible} setIsRadiusVisible={setIsRadiusVisible} />}
+          </Stack.Screen>
+          
           <Stack.Screen name="EventCreation">
             {(props) => <EventCreationScreen {...props} addEvent={addEvent} />}
           </Stack.Screen>
 
           <Stack.Screen name="Blast" component={BlastScreen} />
+          <Stack.Screen name="Profile" component={ProfileScreen} />
+          <Stack.Screen name="Chat" component={ChatScreen} />{/* ChatScreenを追加 */}
         </Stack.Navigator>
       </NavigationContainer>
     </View>

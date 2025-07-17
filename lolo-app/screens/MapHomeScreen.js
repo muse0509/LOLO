@@ -1,9 +1,6 @@
-// screens/MapHomeScreen.js  – zoom‑ready + UI fixes
+// screens/MapHomeScreen.js - Displays Moments
 // ==================================================
-// * Keeps Map.png background and zoom logic
-// * FIX 1: mailBtn no longer stretches vertically — now a fixed 44×44 circle
-// * FIX 2: ScoreTicker rendered as a single horizontal pill (logo + score + user + addr)
-// * All other functionality unchanged
+// + ADD: MomentMarker component to display events with images
 // ==================================================
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -33,32 +30,71 @@ const PFP_USER2= require('../assets/images/pfp_user2.png');
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 /* ---------------- current‑location pulse ---------------- */
-const CurrentUserLocationMarker = () => {
-  const pulse = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, { toValue: 1, duration: 2000, easing: Easing.out(Easing.quad), useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 0, duration: 0, useNativeDriver: true }),
-      ]),
-    ).start();
-  }, [pulse]);
-  const scale   = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.5, 2] });
-  const opacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.7, 0] });
-  return (
-    <View style={styles.locWrapper}>
-      <Animated.View style={[styles.locPulse, { transform: [{ scale }], opacity }]} />
-      <View style={styles.locDot} />
-    </View>
-  );
-};
+const CurrentUserLocationMarker = ({ radius, isVisible }) => {
+    const pulse = useRef(new Animated.Value(0)).current;
+    const animatedRadius = useRef(new Animated.Value(radius)).current;
+
+    useEffect(() => {
+        if (!isVisible) {
+            pulse.stopAnimation();
+            return;
+        };
+        const loop = Animated.loop(
+            Animated.sequence([
+                Animated.timing(pulse, { toValue: 1, duration: 2000, easing: Easing.out(Easing.quad), useNativeDriver: false }),
+                Animated.timing(pulse, { toValue: 0, duration: 0, useNativeDriver: false }),
+            ]),
+        );
+        loop.start();
+        return () => loop.stop();
+    }, [pulse, isVisible]);
+
+    useEffect(() => {
+        Animated.spring(animatedRadius, {
+            toValue: radius,
+            friction: 7,
+            useNativeDriver: false,
+        }).start();
+    }, [radius, animatedRadius]);
+
+    const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.5, 2] });
+    const opacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.7, 0] });
+
+    const pulseStyle = {
+        width: animatedRadius,
+        height: animatedRadius,
+        borderRadius: Animated.divide(animatedRadius, 2),
+        backgroundColor: 'rgba(0,191,255,0.3)',
+        transform: [{ scale }],
+        opacity,
+    };
+
+    const wrapperStyle = {
+        ...styles.locWrapper,
+        width: radius * 2,
+        height: radius * 2,
+        marginLeft: -radius,
+        marginTop: -radius,
+    };
+
+    if (!isVisible) {
+        return <View style={wrapperStyle}><View style={styles.locDot} /></View>;
+    }
+
+    return (
+      <View style={wrapperStyle}>
+        <Animated.View style={[styles.locPulse, pulseStyle]} />
+        <View style={styles.locDot} />
+      </View>
+    );
+  };
 
 /* ---------------- simple avatar marker ---------------- */
-const UserMarker = ({ avatar, style, children }) => (
-  <View style={[styles.userMarkerContainer, style]}>
+const UserMarker = ({ avatar, style, children, onPress }) => (
+  <TouchableOpacity style={[styles.userMarkerContainer, style]} onPress={onPress}>
     <Image source={avatar} style={styles.userAvatar} />
     {children}
-  </View>
+  </TouchableOpacity>
 );
 
 /* ---------------- speech bubble ---------------- */
@@ -70,12 +106,11 @@ const InfoPopup = ({ message, style }) => (
 );
 
 /* ---------------- horizontal score ticker ---------------- */
-const ScoreTicker = ({ score, username, address, style }) => (
+const ScoreTicker = ({ score, username, style }) => (
   <View style={[styles.scoreTicker, style]}>
     <Image source={ETH_LOGO} style={styles.tickerAsset} />
     <Text style={styles.tickerScore}>{score}</Text>
     <Text style={styles.tickerUser}>{username}</Text>
-    <Text style={styles.tickerAddr}>{address}</Text>
   </View>
 );
 
@@ -86,17 +121,23 @@ const ScoreBadge = ({ score, style }) => (
     <Text style={styles.scoreBadgeText}>{score}</Text>
   </View>
 );
-const EventMarker = ({ event, style }) => (
-    <TouchableOpacity style={[styles.eventMarker, style]}>
-        <Text style={styles.eventMarkerText}>{event.name.substring(0, 2)}</Text>
+
+// ★★★ MomentMarkerコンポーネントを追加 ★★★
+const MomentMarker = ({ moment, style }) => (
+    <TouchableOpacity style={[styles.momentMarker, style]}>
+        {moment.image ? (
+            <Image source={{ uri: moment.image }} style={styles.momentImage} />
+        ) : (
+            <Text style={styles.momentText}>{moment.name.substring(0, 2)}</Text>
+        )}
     </TouchableOpacity>
 );
 
+
 /* ================================================== */
-const MapHomeScreen = ({ navigation, events }) => {
+const MapHomeScreen = ({ navigation, events, isRadiusVisible }) => {
   const [selectedAsset, setSelectedAsset] = useState(0);
-  const zoomAnim = useRef(new Animated.Value(1)).current;
-  const handleZoom = (v) => Animated.spring(zoomAnim, { toValue: v, friction: 7, useNativeDriver: true }).start();
+  const [radius, setRadius] = useState(60);
 
   const assets = [
     { id: 'eth', image: ETH_LOGO },
@@ -109,36 +150,50 @@ const MapHomeScreen = ({ navigation, events }) => {
 
   const handleAssetPress = (asset, index) => {
     if (asset.id === 'add') {
-        // プラスボタンならイベント作成画面へ
         navigation.navigate('EventCreation');
     } else {
-        // それ以外ならアセットを選択
         setSelectedAsset(index);
     }
-};
+  };
+
+  const navigateToProfile = (username) => {
+      navigation.navigate('Profile', { username });
+  };
+
   return (
     <View style={styles.root}>
-      {/* zoomable map layer */}
-      <Animated.View style={[styles.zoomContainer, { transform: [{ scale: zoomAnim }] }]}>
+      {/* map layer */}
+      <View style={styles.zoomContainer}>
         <Image source={MAP_IMG} style={styles.mapImage} resizeMode="cover" />
         <View style={styles.overlay} />
 
         {/* floating widgets */}
-        <CurrentUserLocationMarker />
-        <ScoreTicker score="+400" username="tom.eth" address="0xf234...5678" style={{ top: '30%', left: '8%' }} />
+        <CurrentUserLocationMarker radius={radius} isVisible={isRadiusVisible} />
+        <ScoreTicker score="+400" username="tom.eth" style={{ top: '30%', left: '8%' }} />
         <ScoreBadge  score="+100" style={{ top: '45%', left: '65%' }} />
-          
-        <UserMarker avatar={avatars.tom}  style={{ top: '55%', left: '20%' }} />
-        <UserMarker avatar={avatars.user2} style={{ top: '65%', left: '50%' }}><InfoPopup message="Hey, want to meet at the pier?" style={{ position: 'absolute', bottom: 50, right: -20 }} /></UserMarker>
-        {events.map((event, index) => (
-            <EventMarker 
-                key={event.id} 
-                event={event} 
-                // 簡易的に位置をずらして表示
-                style={{ top: `${40 + index * 5}%`, left: `${75 - index * 10}%` }} 
+
+        <UserMarker
+          avatar={avatars.tom}
+          style={{ top: '55%', left: '20%' }}
+          onPress={() => navigateToProfile('Tom')}
+        />
+        <UserMarker
+          avatar={avatars.user2}
+          style={{ top: '65%', left: '50%' }}
+          onPress={() => navigateToProfile('User 2')}
+        >
+          <InfoPopup message="Hey, want to meet at the pier?" style={{ position: 'absolute', bottom: 50, right: -20 }} />
+        </UserMarker>
+        
+        {/* ★★★ EventMarkerをMomentMarkerに変更 ★★★ */}
+        {events.map((moment, index) => (
+            <MomentMarker 
+                key={moment.id} 
+                moment={moment} 
+                style={{ top: `${40 + index * 10}%`, left: `${75 - index * 15}%` }} 
             />
         ))}
-      </Animated.View>
+      </View>
 
       {/* fixed top & bottom UI */}
       <SafeAreaView style={styles.uiContainer} edges={['top', 'bottom']} pointerEvents="box-none">
@@ -162,7 +217,7 @@ const MapHomeScreen = ({ navigation, events }) => {
              </TouchableOpacity>
               ))}
             </View>
-            <TouchableOpacity style={styles.avatarBtn} onPress={() => navigation?.navigate?.('PrivacySettings')}>
+            <TouchableOpacity style={styles.avatarBtn} onPress={() => navigation.navigate('PrivacySettings')}>
               <Image source={PFP_MAIN} style={styles.avatarImg} />
             </TouchableOpacity>
           </View>
@@ -171,12 +226,13 @@ const MapHomeScreen = ({ navigation, events }) => {
         <View style={styles.bottomBar} pointerEvents="box-auto">
           <Slider
             style={{ flex: 1 }}
-            minimumValue={1}
-            maximumValue={2}
+            minimumValue={20}
+            maximumValue={200}
             minimumTrackTintColor="#000"
             maximumTrackTintColor="#ccc"
             thumbTintColor="#000"
-            onValueChange={handleZoom}
+            value={radius}
+            onValueChange={setRadius}
           />
         </View>
       </SafeAreaView>
@@ -195,12 +251,13 @@ const styles = StyleSheet.create({
   topUiWrapper:{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 12 },
   bottomBar:   { paddingHorizontal: 20, paddingBottom: 20 },
 
-  eventMarker: {
+  // ★★★ MomentMarkerのスタイルを追加 ★★★
+  momentMarker: {
     position: 'absolute',
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#FF6347', // トマト色
+    width: 50,
+    height: 50,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
@@ -210,14 +267,18 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 3,
     elevation: 5,
-},
-eventMarkerText: {
-    color: '#fff',
+    overflow: 'hidden',
+  },
+  momentImage: {
+    width: '100%',
+    height: '100%',
+  },
+  momentText: {
+    color: '#333',
     fontWeight: 'bold',
-    fontSize: 14,
-},
+    fontSize: 16,
+  },
 
-  /* fixed 44×44 circle mail btn */
   mailBtn: {
     width: 44,
     height: 44,
@@ -232,7 +293,6 @@ eventMarkerText: {
     elevation: 4,
   },
 
-  /* asset vertical selector */
   assetStack:{ alignItems: 'flex-end' },
   assetBox:  { backgroundColor: 'rgba(0,0,0,0.85)', padding: 6, borderRadius: 26, marginBottom: 12 },
   assetBtn:  { padding: 6, borderRadius: 18, marginVertical: 2 },
@@ -241,32 +301,41 @@ eventMarkerText: {
   avatarBtn: { borderWidth: 2, borderColor: '#fff', borderRadius: 26 },
   avatarImg: { width: 52, height: 52, borderRadius: 26 },
 
-  /* speech bubble */
   infoPopup:{ backgroundColor: '#fff', paddingHorizontal: 7, paddingVertical: 9, borderRadius: 6, maxWidth: 1900,
               shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.22, shadowRadius: 2.22, elevation: 3 },
   infoText: { fontFamily: 'EBGaramond-Regular', color: '#333' },
   popupTail:{ position: 'absolute', bottom: -8, left: 10, width: 0, height: 0, borderLeftWidth: 8, borderRightWidth: 8, borderTopWidth: 8,
               borderLeftColor: 'transparent', borderRightColor: 'transparent', borderTopColor: '#fff' },
 
-  /* H‑layout ticker */
   scoreTicker:{ position: 'absolute', flexDirection: 'row', alignItems: 'center', gap: 6,
                backgroundColor: 'rgba(0,0,0,0.85)', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 20 },
   tickerAsset:{ width: 18, height: 18, resizeMode: 'contain' },
   tickerScore:{ fontFamily: 'EBGaramond-Bold', fontSize: 18, color: '#fff' },
   tickerUser: { fontFamily: 'EBGaramond-Regular', fontSize: 14, color: '#eee' },
-  tickerAddr: { fontFamily: 'monospace', fontSize: 12, color: '#aaa' },
 
-  /* badge */
   scoreBadge:{ position: 'absolute', flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.85)',
               paddingVertical: 6, paddingHorizontal: 10, borderRadius: 16 },
   badgeAsset:{ width: 16, height: 16, resizeMode: 'contain', marginRight: 4 },
   scoreBadgeText:{ fontFamily: 'EBGaramond-Bold', fontSize: 16, color: '#fff' },
 
-  /* user markers */
-  locWrapper:{ position: 'absolute', top: '50%', left: '50%', width: 60, height: 60, marginLeft: -30, marginTop: -30,
-              alignItems: 'center', justifyContent: 'center' },
-  locPulse:  { position: 'absolute', width: 60, height: 60, borderRadius: 30, backgroundColor: 'rgba(0,191,255,0.5)' },
-  locDot:    { width: 22, height: 22, borderRadius: 11, backgroundColor: '#00BFFF', borderWidth: 2, borderColor: '#fff' },
+  locWrapper:{
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    alignItems: 'center',
+    justifyContent: 'center'
+},
+  locPulse:  {
+    position: 'absolute',
+},
+  locDot:    {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#00BFFF',
+    borderWidth: 2,
+    borderColor: '#fff'
+},
 
   userMarkerContainer:{ position: 'absolute' },
   userAvatar:{ width: 44, height: 44, borderRadius: 22, borderWidth: 2, borderColor: '#fff',

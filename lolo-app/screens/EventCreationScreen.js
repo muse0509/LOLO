@@ -11,9 +11,11 @@ import {
   LayoutAnimation,
   Platform,
   UIManager,
-  Alert, // アラート表示のために追加
+  Alert,
+  Image, // Imageコンポーネントを追加
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
+import * as ImagePicker from 'expo-image-picker'; // ImagePickerをインポート
 
 // AndroidでLayoutAnimationを有効にするための設定
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -21,17 +23,10 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 }
 
 // 展開・折りたたみ可能なセクションのためのコンポーネント
-const CollapsibleSection = ({ title, children }) => {
-  const [isOpen, setIsOpen] = useState(false);
-
-  const toggleOpen = () => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setIsOpen(!isOpen);
-  };
-
+const CollapsibleSection = ({ title, children, isOpen, onToggle }) => {
   return (
     <View style={styles.collapsibleContainer}>
-      <TouchableOpacity onPress={toggleOpen} style={styles.collapsibleHeader}>
+      <TouchableOpacity onPress={onToggle} style={styles.collapsibleHeader}>
         <Icon name={isOpen ? "chevron-down" : "chevron-forward"} size={20} color="#333" />
         <Text style={styles.collapsibleTitle}>{title}</Text>
       </TouchableOpacity>
@@ -42,30 +37,57 @@ const CollapsibleSection = ({ title, children }) => {
 
 
 const EventCreationScreen = ({ navigation, addEvent }) => {
-  // 各入力フィールドの状態を管理するためのstate
+  // 各入力フィールドの状態
   const [eventName, setEventName] = useState('');
   const [eventFor, setEventFor] = useState('');
   const [eventLocation, setEventLocation] = useState('');
+  const [image, setImage] = useState(null); // 選択された画像のURIを保存
+
+  // 展開セクションの状態
+  const [openSection, setOpenSection] = useState(null);
+
+  const toggleSection = (sectionName) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setOpenSection(openSection === sectionName ? null : sectionName);
+  };
+
+  // 画像を選択する関数
+  const pickImage = async () => {
+    // Media Libraryへのアクセス許可をリクエスト
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Sorry, we need camera roll permissions to make this work!');
+      return;
+    }
+
+    let result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 1,
+    });
+
+    if (!result.canceled) {
+      setImage(result.assets[0].uri);
+    }
+  };
+
 
   // 「Create」ボタンが押された時の処理
   const handleCreateEvent = () => {
-    // イベント名が空の場合はアラートを表示
     if (!eventName.trim()) {
         Alert.alert('Error', 'Please enter an event name.');
         return;
     }
 
-    // 新しいイベントオブジェクトを作成
     const newEvent = {
         name: eventName,
         for: eventFor,
         location: eventLocation,
+        image: image, // 画像のURIを追加
     };
     
-    // App.jsから渡されたaddEvent関数を実行してイベントを追加
     addEvent(newEvent);
-    
-    // イベント作成後はマップ画面に戻る
     navigation.goBack();
   };
 
@@ -74,77 +96,65 @@ const EventCreationScreen = ({ navigation, addEvent }) => {
     <SafeAreaView style={styles.container}>
         <ScrollView contentContainerStyle={styles.scrollContent}>
             <View style={styles.modal}>
-                {/* ヘッダー */}
                 <View style={styles.header}>
-                    <Text style={styles.headerTitle}>Event Creation</Text>
+                    <Text style={styles.headerTitle}>Create a Moment</Text>
                     <TouchableOpacity onPress={() => navigation.goBack()}>
                         <Icon name="close" size={24} color="#333" />
                     </TouchableOpacity>
                 </View>
 
-                {/* --- フォームセクション --- */}
                 <View style={styles.formGroup}>
-                    <Text style={styles.label}>Event Name</Text>
+                    <Text style={styles.label}>Moment Name</Text>
                     <TextInput
-                        placeholder="Enter event name"
+                        placeholder="e.g., Sunset at the park"
                         style={styles.input}
                         value={eventName}
-                        onChangeText={setEventName} // 入力されるたびにeventName stateを更新
+                        onChangeText={setEventName}
                     />
                 </View>
-
-                <View style={styles.formGroup}>
-                    <Text style={styles.label}>For</Text>
-                    <TextInput
-                        placeholder="ETH holders, Community..."
-                        style={styles.input}
-                        value={eventFor}
-                        onChangeText={setEventFor}
-                    />
-                </View>
-
-                <View style={styles.formGroup}>
-                    <Text style={styles.label}>Lolo</Text>
-                    <TextInput
-                        placeholder="Location or coordinates..."
-                        style={styles.input}
-                        value={eventLocation}
-                        onChangeText={setEventLocation}
-                    />
-                </View>
-
-                {/* RSVP要件セクション */}
-                <CollapsibleSection title="RSVP Requirements">
-                    <Text style={styles.detailText}>- Hold 3 ETH</Text>
-                    <Text style={styles.detailText}>- Hold 1 CryptoPunk</Text>
-                    <TouchableOpacity style={styles.addButton}>
-                        <Icon name="add" size={20} color="#333" />
-                        <Text style={styles.addButtonText}>Add Requirement</Text>
-                    </TouchableOpacity>
-                </CollapsibleSection>
 
                 {/* 画像アップロードセクション */}
                 <View style={styles.formGroup}>
-                   <Text style={styles.label}>Visual</Text>
-                   <View style={styles.uploadBox}>
-                     <Icon name="cloud-upload-outline" size={30} color="#888" />
-                     <Text style={styles.uploadText}>IMG   VID   GIF</Text>
-                   </View>
+                   <Text style={styles.label}>Photo</Text>
+                   <TouchableOpacity style={styles.uploadBox} onPress={pickImage}>
+                     {image ? (
+                        <Image source={{ uri: image }} style={styles.previewImage} />
+                     ) : (
+                        <>
+                            <Icon name="cloud-upload-outline" size={30} color="#888" />
+                            <Text style={styles.uploadText}>Tap to select a photo</Text>
+                        </>
+                     )}
+                   </TouchableOpacity>
                 </View>
-                
-                {/* 詳細セクション */}
-                <CollapsibleSection title="Details">
-                    <Text style={styles.detailText}>- Alcohol-free</Text>
-                    <Text style={styles.detailText}>- Outdoor</Text>
-                     <TouchableOpacity style={styles.addButton}>
-                        <Icon name="add" size={20} color="#333" />
-                        <Text style={styles.addButtonText}>Add Detail</Text>
-                    </TouchableOpacity>
+
+                <CollapsibleSection
+                  title="Details"
+                  isOpen={openSection === 'details'}
+                  onToggle={() => toggleSection('details')}
+                >
+                    <View style={styles.formGroup}>
+                        <Text style={styles.label}>For</Text>
+                        <TextInput
+                            placeholder="ETH holders, Community..."
+                            style={styles.input}
+                            value={eventFor}
+                            onChangeText={setEventFor}
+                        />
+                    </View>
+                    <View style={styles.formGroup}>
+                        <Text style={styles.label}>Location</Text>
+                        <TextInput
+                            placeholder="Location or coordinates..."
+                            style={styles.input}
+                            value={eventLocation}
+                            onChangeText={setEventLocation}
+                        />
+                    </View>
                 </CollapsibleSection>
 
-                {/* 作成ボタン */}
                 <TouchableOpacity style={styles.createButton} onPress={handleCreateEvent}>
-                    <Text style={styles.createButtonText}>Create</Text>
+                    <Text style={styles.createButtonText}>Create Moment</Text>
                 </TouchableOpacity>
             </View>
         </ScrollView>
@@ -194,36 +204,24 @@ const styles = StyleSheet.create({
   },
   collapsibleTitle: { fontFamily: 'EBGaramond-Bold', fontSize: 18, color: '#333', marginLeft: 10 },
   collapsibleContent: {
-      padding: 15,
-      backgroundColor: 'rgba(255, 255, 255, 0.7)',
-      borderBottomLeftRadius: 4,
-      borderBottomRightRadius: 4,
-  },
-  detailText: {
-      fontFamily: 'EBGaramond-Regular',
-      fontSize: 16,
-      marginBottom: 5,
-  },
-  addButton: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      marginTop: 10,
-  },
-  addButtonText: {
-      marginLeft: 5,
-      color: '#333',
-      fontFamily: 'EBGaramond-Bold',
+      paddingTop: 10,
   },
   uploadBox: {
     borderWidth: 2,
     borderColor: '#DDD',
     borderStyle: 'dashed',
     borderRadius: 4,
-    height: 120,
+    height: 150,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#fff',
+    overflow: 'hidden', // 画像がはみ出さないように
   },
   uploadText: { fontFamily: 'monospace', color: '#888', marginTop: 10 },
+  previewImage: {
+      width: '100%',
+      height: '100%',
+  },
   createButton: {
     backgroundColor: '#fff',
     borderWidth: 1,
@@ -235,5 +233,6 @@ const styles = StyleSheet.create({
   },
   createButtonText: { fontFamily: 'EBGaramond-Bold', fontSize: 18, color: '#333' },
 });
+
 
 export default EventCreationScreen;
