@@ -14,26 +14,26 @@ const messagesData = [
   {
     id: '1',
     type: 'token',
-    name: 'ETH Holders',
+    name: 'ETH Whales NYC',
     avatar: ETH_LOGO, // 遷移用にアバター情報を追加
-    text: 'alex: coordinates received',
+    text: 'alex: on my way',
     time: '14:32',
   },
   {
     id: '2',
     type: 'friends',
-    name: 'Close Friends',
+    name: 'Best friends',
     avatar: PFP_USER2, // 代表のアバター
     members: [PFP_TOM, PFP_USER2],
-    text: 'morgan: site analysis complete',
+    text: 'morgan: yo im at the door',
     time: '09:43',
   },
   {
     id: '3',
     type: 'club',
-    name: 'Studio Collective',
+    name: 'Solana Miami Club',
     avatar: SOL_LOGO,
-    text: 'sage: draft ready for review',
+    text: 'sage: why is sol dumping',
     time: 'yesterday',
   },
    {

@@ -1,6 +1,8 @@
-// screens/MapHomeScreen.js - Displays Moments
+// screens/MapHomeScreen.js - Displays Moments (updated)
 // ==================================================
 // + ADD: MomentMarker component to display events with images
+// + ADD: GlowingAvatarMarker to give every user a pulse effect
+// + ADD: Toggle button next to radius slider to show/hide radius overlay
 // ==================================================
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -29,71 +31,75 @@ const PFP_USER2= require('../assets/images/pfp_user2.png');
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
-/* ---------------- current‑location pulse ---------------- */
-const CurrentUserLocationMarker = ({ radius, isVisible }) => {
-    const pulse = useRef(new Animated.Value(0)).current;
-    const animatedRadius = useRef(new Animated.Value(radius)).current;
+/* ---------------- reusable pulse ring ---------------- */
+const PulseRing = ({ diameter = 120, color = 'rgba(0,191,255,0.5)', visible = true }) => {
+  const pulse = useRef(new Animated.Value(0)).current;
 
-    useEffect(() => {
-        if (!isVisible) {
-            pulse.stopAnimation();
-            return;
-        };
-        const loop = Animated.loop(
-            Animated.sequence([
-                Animated.timing(pulse, { toValue: 1, duration: 2000, easing: Easing.out(Easing.quad), useNativeDriver: false }),
-                Animated.timing(pulse, { toValue: 0, duration: 0, useNativeDriver: false }),
-            ]),
-        );
-        loop.start();
-        return () => loop.stop();
-    }, [pulse, isVisible]);
+  useEffect(() => {
+    if (!visible) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 2000, easing: Easing.out(Easing.quad), useNativeDriver: false }),
+        Animated.timing(pulse, { toValue: 0, duration: 0, useNativeDriver: false }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse, visible]);
 
-    useEffect(() => {
-        Animated.spring(animatedRadius, {
-            toValue: radius,
-            friction: 7,
-            useNativeDriver: false,
-        }).start();
-    }, [radius, animatedRadius]);
+  if (!visible) return null;
 
-    const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.5, 2] });
-    const opacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.7, 0] });
+  const scale   = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.5, 2] });
+  const opacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.7, 0] });
 
-    const pulseStyle = {
-        width: animatedRadius,
-        height: animatedRadius,
-        borderRadius: Animated.divide(animatedRadius, 2),
-        backgroundColor: 'rgba(0,191,255,0.3)',
+  return (
+    <Animated.View
+      style={{
+        position: 'absolute',
+        width: diameter,
+        height: diameter,
+        borderRadius: diameter / 2,
+        backgroundColor: color,
         transform: [{ scale }],
         opacity,
-    };
+      }}
+    />
+  );
+};
 
-    const wrapperStyle = {
-        ...styles.locWrapper,
-        width: radius * 2,
-        height: radius * 2,
-        marginLeft: -radius,
-        marginTop: -radius,
-    };
+/* ---------------- current‑location pulse ---------------- */
+const CurrentUserLocationMarker = ({ radius, isVisible }) => {
+  const animatedRadius = useRef(new Animated.Value(radius)).current;
 
-    if (!isVisible) {
-        return <View style={wrapperStyle}><View style={styles.locDot} /></View>;
-    }
+  useEffect(() => {
+    Animated.spring(animatedRadius, {
+      toValue: radius,
+      friction: 7,
+      useNativeDriver: false,
+    }).start();
+  }, [radius, animatedRadius]);
 
-    return (
-      <View style={wrapperStyle}>
-        <Animated.View style={[styles.locPulse, pulseStyle]} />
-        <View style={styles.locDot} />
-      </View>
-    );
+  const wrapperStyle = {
+    ...styles.locWrapper,
+    width: radius * 2,
+    height: radius * 2,
+    marginLeft: -radius,
+    marginTop: -radius,
   };
 
-/* ---------------- simple avatar marker ---------------- */
-const UserMarker = ({ avatar, style, children, onPress }) => (
+  return (
+    <View style={wrapperStyle} pointerEvents="none">
+      <PulseRing diameter={radius * 2} visible={isVisible} />
+      <View style={styles.locDot} />
+    </View>
+  );
+};
+
+/* ---------------- simple avatar marker with glow ---------------- */
+const GlowingAvatarMarker = ({ avatar, style, onPress, glowVisible }) => (
   <TouchableOpacity style={[styles.userMarkerContainer, style]} onPress={onPress}>
+    <PulseRing diameter={80} visible={glowVisible} />
     <Image source={avatar} style={styles.userAvatar} />
-    {children}
   </TouchableOpacity>
 );
 
@@ -124,20 +130,20 @@ const ScoreBadge = ({ score, style }) => (
 
 // ★★★ MomentMarkerコンポーネントを追加 ★★★
 const MomentMarker = ({ moment, style }) => (
-    <TouchableOpacity style={[styles.momentMarker, style]}>
-        {moment.image ? (
-            <Image source={{ uri: moment.image }} style={styles.momentImage} />
-        ) : (
-            <Text style={styles.momentText}>{moment.name.substring(0, 2)}</Text>
-        )}
-    </TouchableOpacity>
+  <TouchableOpacity style={[styles.momentMarker, style]}>
+    {moment.image ? (
+      <Image source={{ uri: moment.image }} style={styles.momentImage} />
+    ) : (
+      <Text style={styles.momentText}>{moment.name.substring(0, 2)}</Text>
+    )}
+  </TouchableOpacity>
 );
 
-
 /* ================================================== */
-const MapHomeScreen = ({ navigation, events, isRadiusVisible }) => {
+const MapHomeScreen = ({ navigation, events }) => {
   const [selectedAsset, setSelectedAsset] = useState(0);
   const [radius, setRadius] = useState(60);
+  const [radiusVisible, setRadiusVisible] = useState(true);
 
   const assets = [
     { id: 'eth', image: ETH_LOGO },
@@ -150,14 +156,14 @@ const MapHomeScreen = ({ navigation, events, isRadiusVisible }) => {
 
   const handleAssetPress = (asset, index) => {
     if (asset.id === 'add') {
-        navigation.navigate('EventCreation');
+      navigation.navigate('EventCreation');
     } else {
-        setSelectedAsset(index);
+      setSelectedAsset(index);
     }
   };
 
   const navigateToProfile = (username) => {
-      navigation.navigate('Profile', { username });
+    navigation.navigate('Profile', { username });
   };
 
   return (
@@ -168,30 +174,34 @@ const MapHomeScreen = ({ navigation, events, isRadiusVisible }) => {
         <View style={styles.overlay} />
 
         {/* floating widgets */}
-        <CurrentUserLocationMarker radius={radius} isVisible={isRadiusVisible} />
-        <ScoreTicker score="+400" username="tom.eth" style={{ top: '30%', left: '8%' }} />
+        <CurrentUserLocationMarker radius={radius} isVisible={radiusVisible} />
+        <ScoreTicker score="+400" username="" style={{ top: '30%', left: '8%' }} />
         <ScoreBadge  score="+100" style={{ top: '45%', left: '65%' }} />
 
-        <UserMarker
+        <GlowingAvatarMarker
           avatar={avatars.tom}
           style={{ top: '55%', left: '20%' }}
+          glowVisible={radiusVisible}
           onPress={() => navigateToProfile('Tom')}
         />
-        <UserMarker
+        <GlowingAvatarMarker
           avatar={avatars.user2}
           style={{ top: '65%', left: '50%' }}
+          glowVisible={radiusVisible}
           onPress={() => navigateToProfile('User 2')}
-        >
-          <InfoPopup message="Hey, want to meet at the pier?" style={{ position: 'absolute', bottom: 50, right: -20 }} />
-        </UserMarker>
-        
-        {/* ★★★ EventMarkerをMomentMarkerに変更 ★★★ */}
+        />
+        <InfoPopup
+          message="Hey, want to meet at the pier?"
+          style={{ position: 'absolute', bottom: '36%', left: '47%' }}
+        />
+
+        {/* events */}
         {events.map((moment, index) => (
-            <MomentMarker 
-                key={moment.id} 
-                moment={moment} 
-                style={{ top: `${40 + index * 10}%`, left: `${75 - index * 15}%` }} 
-            />
+          <MomentMarker
+            key={moment.id}
+            moment={moment}
+            style={{ top: `${40 + index * 10}%`, left: `${75 - index * 15}%` }}
+          />
         ))}
       </View>
 
@@ -208,16 +218,27 @@ const MapHomeScreen = ({ navigation, events, isRadiusVisible }) => {
           <View style={styles.assetStack}>
             <View style={styles.assetBox}>
               {assets.map((a, i) => (
-               <TouchableOpacity key={a.id} style={[styles.assetBtn, selectedAsset === i && styles.assetActive]} onPress={() => handleAssetPress(a, i)}>
-               {a.image ? (
-                 <Image source={a.image} style={styles.assetImg} />
-               ) : (
-                 <MaterialCommunityIcons name={a.icon} size={20} color={selectedAsset === i && a.id !== 'add' ? '#000' : '#fff'} />
-               )}
-             </TouchableOpacity>
+                <TouchableOpacity
+                  key={a.id}
+                  style={[styles.assetBtn, selectedAsset === i && styles.assetActive]}
+                  onPress={() => handleAssetPress(a, i)}
+                >
+                  {a.image ? (
+                    <Image source={a.image} style={styles.assetImg} />
+                  ) : (
+                    <MaterialCommunityIcons
+                      name={a.icon}
+                      size={20}
+                      color={selectedAsset === i && a.id !== 'add' ? '#000' : '#fff'}
+                    />
+                  )}
+                </TouchableOpacity>
               ))}
             </View>
-            <TouchableOpacity style={styles.avatarBtn} onPress={() => navigation.navigate('PrivacySettings')}>
+            <TouchableOpacity
+              style={styles.avatarBtn}
+              onPress={() => navigation.navigate('PrivacySettings')}
+            >
               <Image source={PFP_MAIN} style={styles.avatarImg} />
             </TouchableOpacity>
           </View>
@@ -225,7 +246,7 @@ const MapHomeScreen = ({ navigation, events, isRadiusVisible }) => {
 
         <View style={styles.bottomBar} pointerEvents="box-auto">
           <Slider
-            style={{ flex: 1 }}
+            style={{ flex: 1, marginRight: 12 }}
             minimumValue={20}
             maximumValue={200}
             minimumTrackTintColor="#000"
@@ -234,6 +255,12 @@ const MapHomeScreen = ({ navigation, events, isRadiusVisible }) => {
             value={radius}
             onValueChange={setRadius}
           />
+          <TouchableOpacity
+            style={styles.toggleBtn}
+            onPress={() => setRadiusVisible((prev) => !prev)}
+          >
+            <Ionicons name={radiusVisible ? 'eye' : 'eye-off'} size={22} color="#000" />
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     </View>
@@ -249,7 +276,10 @@ const styles = StyleSheet.create({
 
   uiContainer: { ...StyleSheet.absoluteFillObject, justifyContent: 'space-between' },
   topUiWrapper:{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 12 },
-  bottomBar:   { paddingHorizontal: 20, paddingBottom: 20 },
+  bottomBar:   { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 20 },
+
+  toggleBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center',
+              shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 3.84, elevation: 4 },
 
   // ★★★ MomentMarkerのスタイルを追加 ★★★
   momentMarker: {
@@ -301,10 +331,10 @@ const styles = StyleSheet.create({
   avatarBtn: { borderWidth: 2, borderColor: '#fff', borderRadius: 26 },
   avatarImg: { width: 52, height: 52, borderRadius: 26 },
 
-  infoPopup:{ backgroundColor: '#fff', paddingHorizontal: 7, paddingVertical: 9, borderRadius: 6, maxWidth: 1900,
+  infoPopup:{ backgroundColor: '#fff', paddingHorizontal: 12, paddingVertical: 9, borderRadius: 6, minWidth: 220,
               shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.22, shadowRadius: 2.22, elevation: 3 },
   infoText: { fontFamily: 'EBGaramond-Regular', color: '#333' },
-  popupTail:{ position: 'absolute', bottom: -8, left: 10, width: 0, height: 0, borderLeftWidth: 8, borderRightWidth: 8, borderTopWidth: 8,
+  popupTail:{ position: 'absolute', bottom: -8, left: 20, width: 0, height: 0, borderLeftWidth: 8, borderRightWidth: 8, borderTopWidth: 8,
               borderLeftColor: 'transparent', borderRightColor: 'transparent', borderTopColor: '#fff' },
 
   scoreTicker:{ position: 'absolute', flexDirection: 'row', alignItems: 'center', gap: 6,
@@ -324,22 +354,24 @@ const styles = StyleSheet.create({
     left: '50%',
     alignItems: 'center',
     justifyContent: 'center'
-},
-  locPulse:  {
-    position: 'absolute',
-},
-  locDot:    {
+  },
+  locDot: {
     width: 22,
     height: 22,
     borderRadius: 11,
     backgroundColor: '#00BFFF',
     borderWidth: 2,
-    borderColor: '#fff'
-},
+    borderColor: '#fff',
+    shadowColor: '#00BFFF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.9,
+    shadowRadius: 6,
+    elevation: 6,
+  },
 
   userMarkerContainer:{ position: 'absolute' },
   userAvatar:{ width: 44, height: 44, borderRadius: 22, borderWidth: 2, borderColor: '#fff',
-               shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 3, elevation: 5 },
+               shadowColor: '#00BFFF', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.8, shadowRadius: 6, elevation: 5 },
 });
 
 export default MapHomeScreen;
