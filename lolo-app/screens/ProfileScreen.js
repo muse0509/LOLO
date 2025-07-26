@@ -1,8 +1,9 @@
-// screens/ProfileScreen.js – extended social + mutual friends UI
+// screens/ProfileScreen.js – extended social + mutual friends + shared communities UI
 // ==================================================
 // * Shows social media links for "My Profile" (icons only)
 // * For other profiles, displays follower counts per social network as icon + number
 // * Adds a "Mutual Friends" face‑pile row using simple overlap styling
+// * NEW: Adds a "Shared Communities" section (text chips)
 // ==================================================
 
 import React from 'react';
@@ -39,6 +40,7 @@ const MOCK_PROFILES = {
     stats: { followers: '5.8k', following: '120', moments: '5' },
     socialFollowers: { twitter: 5200, instagram: 800, linkedin: 300, facebook: 150 },
     mutualFriends: [require('../assets/images/pfp.png'), require('../assets/images/pfp_user2.png')],
+    sharedCommunities: ['CryptoPunks', 'ETH', 'SOL', 'Best Friends Group'],
   },
   'User 2': {
     name: 'yusuke',
@@ -47,6 +49,7 @@ const MOCK_PROFILES = {
     stats: { followers: '340', following: '600', moments: '12' },
     socialFollowers: { twitter: 120, instagram: 90, linkedin: 30, facebook: 12 },
     mutualFriends: [require('../assets/images/pfp_tom.png')],
+    sharedCommunities: ['ETH', 'NFT Japan', 'Best Friends Group'],
   },
 };
 
@@ -83,6 +86,13 @@ const FacePile = ({ images }) => (
         style={[styles.facePileAvatar, { left: idx * 22, zIndex: images.length - idx }]}
       />
     ))}
+  </View>
+);
+
+/* ---------------- Community chips ---------------- */
+const CommunityChip = ({ label }) => (
+  <View style={styles.chip}>
+    <Text style={styles.chipText}>{label}</Text>
   </View>
 );
 
@@ -141,6 +151,18 @@ const ProfileScreen = ({ route, navigation }) => {
             </View>
           )}
 
+          {/* Shared Communities */}
+          {profile.sharedCommunities && (
+            <View style={styles.communitiesWrapper}>
+              <Text style={styles.mutualLabel}>Shared Communities</Text>
+              <View style={styles.chipRow}>
+                {profile.sharedCommunities.map((c) => (
+                  <CommunityChip key={c} label={c} />
+                ))}
+              </View>
+            </View>
+          )}
+
           {/* Message Button */}
           <TouchableOpacity
             style={styles.messageButton}
@@ -154,9 +176,12 @@ const ProfileScreen = ({ route, navigation }) => {
   );
 };
 
+
 /* ---------------- Styles ---------------- */
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8F5F0' },
+
+  /* ---------- Header ---------- */
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -164,11 +189,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     paddingTop: 10,
   },
-  headerTitle: {
-    fontFamily: 'EBGaramond-Bold',
-    fontSize: 20,
-    color: '#333',
-  },
+  headerTitle: { fontFamily: 'EBGaramond-Bold', fontSize: 20, color: '#333' },
+
+  /* ---------- Profile Core ---------- */
   profileContainer: { alignItems: 'center', padding: 20 },
   avatar: {
     width: 120,
@@ -187,6 +210,8 @@ const styles = StyleSheet.create({
     marginVertical: 10,
     paddingHorizontal: 20,
   },
+
+  /* ---------- Stats ---------- */
   statsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
@@ -201,24 +226,34 @@ const styles = StyleSheet.create({
   statNumber: { fontFamily: 'EBGaramond-Bold', fontSize: 20, color: '#333' },
   statLabel: { fontFamily: 'EBGaramond-Regular', fontSize: 14, color: '#888' },
 
-  /* Social */
+  /* ---------- Social Links ---------- */
   socialRow: { flexDirection: 'row', gap: 18, marginTop: 10 },
   socialBtn: { alignItems: 'center' },
-  socialCount: {
-    fontFamily: 'EBGaramond-Regular',
-    fontSize: 12,
-    color: '#333',
-    marginTop: 4,
-  },
+  socialCount: { fontFamily: 'EBGaramond-Regular', fontSize: 12, color: '#333', marginTop: 4 },
 
-  /* Mutual Friends */
+  /* ---------- Mutual Friends ---------- */
   mutualWrapper: { width: '100%', marginTop: 30 },
-  mutualLabel: {
+
+  /* ---------- Shared Communities ---------- */
+  communitiesWrapper: { width: '100%', marginTop: 30 },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: {
+    backgroundColor: '#EAEAEA',
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginVertical: 4,
+  },
+  chipText: { fontFamily: 'EBGaramond-Regular', fontSize: 14, color: '#333' },
+
+  sectionLabel: {
     fontFamily: 'EBGaramond-Regular',
     fontSize: 16,
     color: '#333',
     marginBottom: 8,
   },
+
+  /* ---------- Face‑pile ---------- */
   facePileWrapper: { flexDirection: 'row', height: 40 },
   facePileAvatar: {
     position: 'absolute',
@@ -229,7 +264,7 @@ const styles = StyleSheet.create({
     borderColor: '#fff',
   },
 
-  /* Message Button */
+  /* ---------- Message Button ---------- */
   messageButton: {
     backgroundColor: '#fff',
     borderWidth: 1.5,
@@ -237,13 +272,8 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingVertical: 12,
     paddingHorizontal: 50,
-    marginTop: 20,
+    marginTop: 30,
   },
-  messageButtonText: {
-    fontFamily: 'EBGaramond-Bold',
-    fontSize: 18,
-    color: '#333',
-  },
+  messageButtonText: { fontFamily: 'EBGaramond-Bold', fontSize: 18, color: '#333' },
 });
-
 export default ProfileScreen;
