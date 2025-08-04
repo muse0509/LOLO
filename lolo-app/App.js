@@ -15,6 +15,7 @@ import EventCreationScreen from './screens/EventCreationScreen';
 import BlastScreen from './screens/BlastScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import ChatScreen from './screens/ChatScreen'; // ChatScreenをインポート
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 const Stack = createStackNavigator();
 
@@ -45,6 +46,7 @@ export default function App() {
 
   return (
     <View style={styles.container} onLayout={onLayoutRootView}>
+      <GestureHandlerRootView style={{flex:1}}>
       <NavigationContainer>
         <Stack.Navigator
           initialRouteName="Login"
@@ -75,6 +77,7 @@ export default function App() {
           <Stack.Screen name="Chat" component={ChatScreen} />{/* ChatScreenを追加 */}
         </Stack.Navigator>
       </NavigationContainer>
+      </GestureHandlerRootView>
     </View>
   );
 }
